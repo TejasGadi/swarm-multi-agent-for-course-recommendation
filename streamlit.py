@@ -1,8 +1,8 @@
 from src.config.config import OPENAI_API_KEY, TAVILY_API_KEY, EXA_API_KEY, PINECONE_API_KEY, LLM_MODEL
 import os
 from pathlib import Path
-from src.agents import student_profile_agent, course_discovery_agent, career_path_agent
-from src.reset_profile import reset_profile_to_empty
+from src.agents.agents import student_profile_agent, course_discovery_agent, career_path_agent
+from src.reset_profile.reset_profile import reset_profile_to_empty
 
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 os.environ["TAVILY_API_KEY"] = TAVILY_API_KEY
@@ -35,12 +35,12 @@ swarm = create_swarm(
     store=store
 )
 
-# Delete
-store.delete(("swarm",), "1")
-checkpointer.delete_thread("1")
+# # Delete
+# store.delete(("swarm",), "1")
+# checkpointer.delete_thread("1")
 
-# Profile reset to empty values on starting chat
-reset_profile_to_empty()
+# # Profile reset to empty values on starting chat
+# reset_profile_to_empty()
 
 config = {"configurable": {"thread_id": "3"}}
 
@@ -50,10 +50,20 @@ profile_json_path = Path("./profile.json")
 import streamlit as st
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
+
 st.set_page_config(page_title="LangGraph Chat", page_icon="🧠")
 
 st.title("🧠 LangGraph Multi-Agent Chat")
 st.markdown("Talk to your multi-agent system. Tool calls and handoffs included!")
+
+# Sidebar: Clear chat history
+with st.sidebar:
+    if st.button("🧹 Clear Chat History"):
+        store.delete(("swarm",), "1")
+        checkpointer.delete_thread("1")
+        reset_profile_to_empty()
+        st.session_state.chat_history = []
+        st.session_state.last_message_count = 0
 
 # Initialize session state
 if "chat_history" not in st.session_state:
