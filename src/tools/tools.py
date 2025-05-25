@@ -7,27 +7,23 @@ from pydantic import BaseModel, Field
 from langchain_community.tools.tavily_search import TavilySearchResults
 from src.config.config import OPENAI_API_KEY, LLM_MODEL, TAVILY_API_KEY
 
-retriever = PineconeVectorStore.from_existing_index(index_name="course-index", embedding=OpenAIEmbeddings(api_key=OPENAI_API_KEY)).as_retriever()
+retriever = PineconeVectorStore.from_existing_index(index_name="course-index", embedding=OpenAIEmbeddings(api_key=OPENAI_API_KEY)).as_retriever(search_kwargs={"k": 8})
 
 retriever_tool = create_retriever_tool(
     retriever,
-    "pinecone_search",
-    "A tool to search the Pinecone vector database for relevant course information.",
+    "database_search",
+    "A tool to search the database for relevant course information.",
 )
-
 
 class TavilySearchInput(BaseModel):
     query: str = Field(..., description="The query to search the web for relevant course information.")
 
-class PineconeSearchInput(BaseModel):
-    query: str = Field(..., description="The query to search the Pinecone vector database for relevant course information.")
-
 
 course_discovery_agent_tools=[
     Tool(
-        name="tavily_search",
+        name="web_search",
         func=TavilySearchResults(max_results=5),
-        description="A tool to search the web for relevant course information.",
+        description="A fallback tool to search the web for relevant course information.",
         args_schema=TavilySearchInput
     ),
     retriever_tool
@@ -36,7 +32,7 @@ course_discovery_agent_tools=[
 
 # --- Career Path Agent Tools Implementation
 
-llm = ChatOpenAI(model=LLM_MODEL, temperature=0.4)
+llm = ChatOpenAI(model=LLM_MODEL, temperature=0.3)
 
 class CareerPathAnalysisInput(BaseModel):
     query: str = Field(..., description="The query to analyze the career path.")

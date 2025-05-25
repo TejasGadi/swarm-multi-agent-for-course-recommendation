@@ -1,15 +1,13 @@
 {
-  "name": "Tejas Gadi",
-  "educational_level": "Graduate",
-  "age": 22,
-  "course_description": "Looking for courses related to Machine Learning.",
-  "course_mode": "online",
-  "daily_hours": 2,
-  "preferred_timing": "evening",
-  "max_duration_months": 6,
-  "language": [
-    "English"
-  ],
+  "name": "",
+  "educational_level": "",
+  "age": null,
+  "course_description": "",
+  "course_mode": "",
+  "daily_hours": null,
+  "preferred_timing": "",
+  "max_duration_months": null,
+  "language": [],
   "certification_needed": false,
-  "location_preference": "home"
+  "location_preference": ""
 }

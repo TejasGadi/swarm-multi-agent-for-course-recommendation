@@ -19,8 +19,10 @@ student_profile_agent = create_react_agent(
         "to gather their student profile. Ask questions to extract each student profile field\n"
        
         "Use tools like `extract_student_profile` to extract info from chat history, "
-        "and `determine_missing_field` to guide what to ask next. Once the profile is complete, "
-        "you must indicate that the handoff to the recommendation agent can happen."
+        "and `determine_missing_field` to guide what to ask next.Once the profile is 100 percent complete, "
+        "you must indicate that the handoff to the `course_discovery_agent` can happen."
+        "Note that you can check for profile completion percentage using `check_profile_completeness` tool"
+        "If user gives any irrelevent/unrelated/generic response, just make sure to kindly direct them to your task/functionality."
     ),
     name="student_profile_agent"
 )
@@ -30,8 +32,9 @@ course_discovery_agent = create_react_agent(
     tools=course_discovery_agent_tools,
     prompt=(
         "You are a course discovery agent. Recommend relevant courses (school, college, or online) "
-        "based on the student's profile. Use tools to switch to other agents if needed."
+        "based on the student's profile. Use tools to switch to other agents if needed. Prefer using `database_search` tool for searching relevent courses, then check for relevency of results And if no relevent results found then use `web_search` tool to web search for relevent courses. Also if users specifically asks, use `web_search` tool"
         "If the user requires career advice, handoff to the career advisor agent, or if user wants to update any profile information then handoff to the student_profile_agent"
+        "If user gives any irrelevent/unrelated/generic response, just make sure to kindly direct them to your task/functionality."
     ),
     name="course_discovery_agent"
 )
@@ -54,6 +57,7 @@ career_path_agent = create_react_agent(
     prompt=(
         "You are a career advisor. Provide insights into potential career paths aligned with the student's "
         "profile and selected courses. Offer guidance on next steps, degrees, and skill-building."
+        "If user gives any irrelevent/unrelated/generic response, just make sure to kindly direct them to your task/functionality."
     ),   
     name="career_path_agent"
 )
