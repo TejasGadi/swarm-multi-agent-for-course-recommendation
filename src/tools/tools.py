@@ -3,16 +3,70 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_core.tools.retriever import create_retriever_tool
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import Tool
+from typing import List
 from pydantic import BaseModel, Field
 from langchain_community.tools.tavily_search import TavilySearchResults
 from src.config.config import OPENAI_API_KEY, LLM_MODEL, TAVILY_API_KEY
+
+# --- Define Input Schema for the tool ---
+class CourseValidationInput(BaseModel):
+    courses: List[str] = Field(..., description="List of courses i.e. Metadata of the courses to validate, mention all courses list, each course in form of detailed text")
+
+
+from typing import Dict
+import json
+
+class CourseSuitability(BaseModel):
+    courseName: str = Field(
+        ...,
+        title="Course Name",
+        description="The name of the course being evaluated for suitability."
+    )
+    suitabilityDescription: str = Field(
+        ...,
+        title="Suitability Description",
+        description="A detailed explanation of how well the course aligns (or does not align) with the student's profile."
+    )
+
+def validate_course_tool(input: CourseValidationInput) -> Dict:
+    # Load the profile from file
+    with profile_json_path.open("r", encoding="utf-8") as f:
+        profile = json.load(f)
+
+    # Convert the profile dict into a readable string format (optional but useful)
+    profile_text = ". ".join(f"{k}: {v}" for k, v in profile.items())
+
+    # Construct the validation query
+    prompt = (
+        "You are a suitability analysis agent. Evaluate how suitable each given course is for the student, "
+        "based on their profile, constraints, and preferences. "
+        "If necessary, ask clarifying questions. For each course, indicate how well it aligns with the profile. "
+        "If it doesn't align, explain why.\n\n"
+        f"Courses: {input.courses}\n"
+        f"Student Profile: {profile_text}"
+    )
+
+    structured_llm = llm.with_structured_output(List[CourseSuitability])
+    # Call the LLM
+    result = structured_llm.invoke([{"role": "user", "content": prompt}])
+
+    return {"suitability_result": result.dict()}
+
+course_suitability_agent_tools=[
+    Tool(
+        name="validate_course_tool",
+        func=validate_course_tool,
+        description="Validate course suitability against a student's profile and provide matches, mismatches",
+        args_schema=CourseValidationInput
+    )
+]
 
 retriever = PineconeVectorStore.from_existing_index(index_name="course-index", embedding=OpenAIEmbeddings(api_key=OPENAI_API_KEY)).as_retriever(search_kwargs={"k": 8})
 
 retriever_tool = create_retriever_tool(
     retriever,
     "database_search",
-    "A tool to search the database for relevant course information.",
+    "A tool to semantically search the course database using natural language queries. Make sure the when calling this tool, you MUST provide a natural language query that reflects course preferences, constraints, or requirements.",
 )
 
 class TavilySearchInput(BaseModel):
@@ -23,10 +77,10 @@ course_discovery_agent_tools=[
     Tool(
         name="web_search",
         func=TavilySearchResults(max_results=5),
-        description="A fallback tool to search the web for relevant course information.",
+        description="A tool to search the web for relevant course information.",
         args_schema=TavilySearchInput
     ),
-    retriever_tool
+    retriever_tool,
 ]
 
 
@@ -122,13 +176,7 @@ def extract_student_profile(conversation: str) -> dict:
     # Newly extract fields(new_profile) add to profile, given that add only null/empty fields
     # Merge: only update missing fields
     for key, value in new_profile.items():
-        if (
-            key in profile and (
-                profile[key] is None or
-                profile[key] == "" or
-                (isinstance(profile[key], list) and not profile[key])
-            )
-        ):
+        if key in profile:
             profile[key] = value
 
     # Save updated profile
@@ -214,92 +262,6 @@ student_profile_agent_tools=[
     )
 ]
 
-# # --- Define Input Schema for the tool ---
-# class CourseValidationInput(BaseModel):
-#     course: dict = Field(..., description="Metadata of the course to validate")
-#     profile: dict = Field(..., description="Student profile dictionary")
-
-
-# import re
-# def validate_course_tool(course: dict, profile: dict) -> dict:
-#     validation = {
-#         "score": 0,
-#         "matches": [],
-#         "mismatches": [],
-#         "questions": []
-#     }
-
-#     # Education level check
-#     if profile.get("education_level") and profile["education_level"].lower() in course.get("level", "").lower():
-#         validation["score"] += 1
-#         validation["matches"].append(f"Education level ({course.get('level')}) matches your current level.")
-#     else:
-#         validation["mismatches"].append(f"Course level ({course.get('level')}) might not match your education level.")
-#         validation["questions"].append(f"Are you comfortable with a course at {course.get('level')} level?")
-
-#     # Mode preference check
-#     if profile.get("preferred_mode") and course.get("mode") and course["mode"].lower() == profile["preferred_mode"].lower():
-#         validation["score"] += 1
-#         validation["matches"].append(f"Delivery mode ({course['mode']}) matches your preference.")
-#     else:
-#         validation["mismatches"].append(f"Course mode ({course.get('mode')}) differs from your preferred mode.")
-#         validation["questions"].append(f"Would you consider a {course.get('mode')} course?")
-
-#     # Time commitment check
-#     if "availability" in profile and profile["availability"]:
-#         try:
-#             daily_commitment = course.get("daily_commitment", "")
-#             hours = int(re.search(r"\d+", daily_commitment).group())
-#             available_hours = int(profile["availability"].get("hours_per_day", 24))
-#             if hours <= available_hours:
-#                 validation["score"] += 1
-#                 validation["matches"].append("Time commitment fits your availability.")
-#             else:
-#                 validation["mismatches"].append(f"Required time ({daily_commitment}) might exceed your availability.")
-#                 validation["questions"].append("Can you accommodate this time commitment?")
-#         except Exception:
-#             validation["questions"].append(f"Can you commit {course.get('daily_commitment')}?")
-
-#     # Prerequisites check
-#     if course.get("prerequisites"):
-#         validation["questions"].append("Do you meet these prerequisites: " + ", ".join(course["prerequisites"]))
-
-#     # Career goals alignment check
-#     if profile.get("career_goals") and course.get("career_outcomes"):
-#         matched_goals = [goal for goal in profile["career_goals"]
-#                         if any(goal.lower() in outcome.lower() for outcome in course["career_outcomes"])]
-#         if matched_goals:
-#             validation["score"] += 1
-#             validation["matches"].append("Course aligns with your career goals.")
-
-#     # Format a readable message summarizing validation
-#     message_lines = [f"\nRegarding {course.get('title')} by {course.get('provider')}:"]
-#     if validation["matches"]:
-#         message_lines.append("\nPositive matches:")
-#         message_lines.extend([f"✓ {m}" for m in validation["matches"]])
-#     if validation["mismatches"]:
-#         message_lines.append("\nPotential concerns:")
-#         message_lines.extend([f"! {m}" for m in validation["mismatches"]])
-#     if validation["questions"]:
-#         message_lines.append("\nQuestions to consider:")
-#         message_lines.extend([f"? {q}" for q in validation["questions"]])
-
-#     message = "\n".join(message_lines)
-
-#     return {
-#         "validation": validation,
-#         "message": message
-#     }
-
-
-# course_suitability_agent_tools=[
-#     Tool(
-#         name="validate_course_tool",
-#         func=validate_course_tool,
-#         description="Validate course suitability against a student's profile and provide matches, mismatches, and clarifying questions.",
-#         args_schema=CourseValidationInput
-#     )
-# ]
 
 from langgraph.prebuilt import create_react_agent
 from langgraph_swarm import create_handoff_tool
@@ -327,5 +289,7 @@ student_profile_agent_tools.append(transfer_to_course_discovery_agent)
 
 course_discovery_agent_tools.append(transfer_to_career_path_agent)
 course_discovery_agent_tools.append(transfer_to_student_profile_agent)
+
+course_suitability_agent_tools.append(transfer_to_career_path_agent)
 
 career_path_agent_tools.append(transfer_to_student_profile_agent)
